@@ -9,14 +9,14 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import kotlinx.coroutines.*
-
-sealed class PokemonResult {
-    data class Success(val pokemon: PokemonRestResponse) : PokemonResult()
-    data class Error(val message: String) : PokemonResult()
-}
+import org.springframework.kafka.core.KafkaTemplate
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.syariatifaris.example.kotlin_sandbox.entities.PokemonResult
 
 @RestController
-class HomeController {
+class HomeController(
+    private val kafkaTemplate: KafkaTemplate<String, String>
+) {
     @GetMapping("/")
     fun index(): String{
         return runBlocking {
@@ -33,7 +33,12 @@ class HomeController {
     @GetMapping("/pokemon/{id}")
     fun getPokemonById(@PathVariable id: Int): PokemonRestResponse?{
         return runBlocking {
-            fetchPokemon(OkHttpClient(), id)
+            val pokemon = fetchPokemon(OkHttpClient(), id)
+            pokemon?.let{
+                val message = jacksonObjectMapper().writeValueAsString(it)
+                kafkaTemplate.send("pokemon_events", message)
+            }
+            pokemon
         }
     }
 
